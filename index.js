@@ -49,6 +49,12 @@ const CoreSwapV4_ABI = [
   'function platformPool() view returns (uint256)'
 ];
 
+// FeeManager (opcional para cotizaciones más precisas)
+const FeeManagerV4_ABI = [
+  'function currentTier(address) view returns (uint8)',
+  'function feeConfig() view returns (tuple(uint16 defaultPlatformBP,uint16 vipPlatformBP,uint16 premiumPlatformBP,uint16 maxReferralTotalBP))'
+];
+
 const ReferralEngineV4_ABI = [
   'function pendingReferral(address) view returns (uint256)',
   'function totalPendingReferral() view returns (uint256)',
@@ -103,9 +109,14 @@ const ReferralEngineV4_ABI = [
  * --------------------------------------------------------------------------*/
 function initContracts(cfg){
   if(!cfg.provider) throw new Error('provider requerido');
-  const core = new ethers.Contract(cfg.coreAddress, CoreSwapV4_ABI, cfg.signer||cfg.provider);
-  const referral = new ethers.Contract(cfg.referralAddress, ReferralEngineV4_ABI, cfg.signer||cfg.provider);
-  return { core, referral };
+  const runner = cfg.signer||cfg.provider;
+  const core = new ethers.Contract(cfg.coreAddress, CoreSwapV4_ABI, runner);
+  const referral = new ethers.Contract(cfg.referralAddress, ReferralEngineV4_ABI, runner);
+  let feeManager = null;
+  if (cfg.feeManagerAddress) {
+    try { feeManager = new ethers.Contract(cfg.feeManagerAddress, FeeManagerV4_ABI, runner); } catch {/* ignore */}
+  }
+  return { core, referral, feeManager };
 }
 
 /** ---------------------------------------------------------------------------
@@ -129,34 +140,30 @@ async function quoteBest(core, amountInWei, tokenIn, tokenOut){
 }
 
 async function swapETHForToken({ core, tokenOut, amountInWei, wNative, slippageBps=800, referralModelId=0, referrer=ethers.ZeroAddress, requestedTier=0, recipient=ethers.ZeroAddress }){
-
-/** ---------------------------------------------------------------------------
- * swapETHForTokenChain (Modelo 2 explícito)
- * Permite pasar cadena completa [L1,L2,L3]. Si alguna posición es address(0) se acumula leftover.
- * Parámetros principales:
- *  - refChain: array length 3 con addresses (puede contener zeros al final)
- *  - referralModelId: debe ser 2 para que Core procese cadena explícita.
- * Slippage: se calcula sobre output bruto esperado y se aplica sobre neto.
- */
-async function swapETHForTokenChain({ core, tokenOut, amountInWei, refChain, wNative, slippageBps=800, referralModelId=2, requestedTier=0, recipient=ethers.ZeroAddress }){
-  if(!Array.isArray(refChain) || refChain.length !== 3) throw new Error('refChain debe tener length 3');
-  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {}
-  }
-  const quote = wNativeAddr ? await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n})) : { amountOut:0n };
-  const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n;
-  const deadline = calcDeadline();
-  const tx = await core.swapETHForTokenChain(tokenOut, minOut, deadline, referralModelId, refChain, requestedTier, recipient, { value: amountInWei });
-  return tx.wait();
-}
   // Determina tokenIn como wNative (wrapped) para quote
   let wNativeAddr = wNative;
   if(!wNativeAddr){
     try { wNativeAddr = await core.wNative(); } catch { /* ignore */ }
   }
   const quote = wNativeAddr ? await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n})) : { amountOut:0n };
-  const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n;
+  const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n; // Nota: minOut sobre output estimado bruto; para slippage muy bajo considerar usar quoteBuy.
   const deadline = calcDeadline();
   const tx = await core.swapETHForToken(tokenOut, minOut, deadline, referralModelId, referrer, requestedTier, recipient, { value: amountInWei });
+  return tx.wait();
+}
+
+/** ---------------------------------------------------------------------------
+ * swapETHForTokenChain (Modelo 2 explícito)
+ * Permite pasar cadena completa [L1,L2,L3]. Si alguna posición es address(0) se acumula leftover.
+ * Slippage: usar quoteBuy para cálculo preciso neto si se exige tolerancia estricta.
+ */
+async function swapETHForTokenChain({ core, tokenOut, amountInWei, refChain, wNative, slippageBps=800, referralModelId=2, requestedTier=0, recipient=ethers.ZeroAddress }){
+  if(!Array.isArray(refChain) || refChain.length !== 3) throw new Error('refChain debe tener length 3');
+  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
+  const quote = wNativeAddr ? await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n})) : { amountOut:0n };
+  const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n;
+  const deadline = calcDeadline();
+  const tx = await core.swapETHForTokenChain(tokenOut, minOut, deadline, referralModelId, refChain, requestedTier, recipient, { value: amountInWei });
   return tx.wait();
 }
 
@@ -172,6 +179,59 @@ async function swapTokenForToken({ core, tokenIn, tokenOut, amountInWei, slippag
   const deadline = calcDeadline();
   const tx = await core.swapTokenForToken(tokenIn, tokenOut, amountInWei, minOut, deadline, referralModelId, referrer, requestedTier, recipient);
   return tx.wait();
+}
+
+/** ---------------------------------------------------------------------------
+ * PRECISION QUOTES (No-referral focus)
+ * Estas funciones replican la lógica interna del Core para estimar el netOut real
+ * teniendo en cuenta la aplicación de platformFee antes (buy) o después (sell) de la operación.
+ * Para escenarios con referral pueden extenderse incorporando bps de modelo.
+ */
+
+async function _getPlatformFeeBp(feeManager, user){
+  if(!feeManager) return 0; // fallback si no disponible
+  try {
+    const tier = await feeManager.currentTier(user);
+    const cfg = await feeManager.feeConfig();
+    return tier === 2 ? cfg.premiumPlatformBP : (tier === 1 ? cfg.vipPlatformBP : cfg.defaultPlatformBP);
+  } catch { return 0; }
+}
+
+async function quoteBuy({ core, feeManager, user, amountInWei, tokenOut, wNative, slippageBps=800 }){
+  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
+  if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netForSwap:0n, estimatedOut:0n, minOut:0n };
+  const [, , grossOut] = await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
+  const platformFee = (amountInWei * BigInt(platformFeeBP)) / 10000n; // aplicado sobre amountIn (fee base)
+  const netForSwap = amountInWei - platformFee; // referralFee asumido 0 para no-referral
+  // Aproximación lineal: output escala lineal con input efectiva
+  const estimatedOut = grossOut === 0n ? 0n : (grossOut * netForSwap) / amountInWei;
+  const minOut = applySlippage(estimatedOut, slippageBps);
+  return { grossQuote: grossOut, platformFeeBP, platformFee, netForSwap, estimatedOut, minOut };
+}
+
+async function quoteSell({ core, feeManager, user, amountInTokenWei, tokenIn, wNative, slippageBps=800 }){
+  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
+  if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netOut:0n, minOut:0n };
+  const [, , grossOut] = await core.quoteBestPath(amountInTokenWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
+  const platformFee = (grossOut * BigInt(platformFeeBP)) / 10000n; // fee sobre salida nativa
+  const netOut = grossOut - platformFee; // referralFee asumido 0
+  const minOut = applySlippage(netOut, slippageBps);
+  return { grossQuote: grossOut, platformFeeBP, platformFee, netOut, minOut };
+}
+
+async function quoteTokenForToken({ core, feeManager, user, amountInWei, tokenIn, tokenOut, wNative, slippageBps=800 }){
+  // Replica lógica: leg1 tokenIn->wNative, fee sobre wOut, leg2 native->tokenOut
+  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
+  if(!wNativeAddr) return { leg1Out:0n, platformFee:0n, netNative:0n, leg2Out:0n, minOut:0n };
+  const [, , leg1Out] = await core.quoteBestPath(amountInWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
+  const platformFee = (leg1Out * BigInt(platformFeeBP)) / 10000n; // fee sobre salida wNative (se unwrappa)
+  const netNative = leg1Out - platformFee; // referralFee asumido 0
+  const [, , leg2Out] = await core.quoteBestPath(netNative, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  const minOut = applySlippage(leg2Out, slippageBps);
+  return { leg1Out, platformFeeBP, platformFee, netNative, leg2Out, minOut };
 }
 
 /** ---------------------------------------------------------------------------
@@ -301,6 +361,9 @@ module.exports = {
   swapTokenForToken,
   swapETHForTokenPath,
   swapTokenForTokenPath,
+  quoteBuy,
+  quoteSell,
+  quoteTokenForToken,
   getReferralSnapshot,
   getPending,
   hasClaimable,
