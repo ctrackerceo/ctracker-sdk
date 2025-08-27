@@ -7,7 +7,9 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
+  "allowJs": true,
+  // Evita que el compilador intente escribir archivos .js de salida encima de los .js fuente
+  "noEmit": true,
     "types": []
   },
   "include": ["index.d.ts", "examples/**/*.*"],
