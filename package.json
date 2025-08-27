@@ -1,0 +1,45 @@
+{
+  "name": "@ctracker/sdk",
+  "version": "1.0.0",
+  "description": "C-Tracker V4 Swap + Referral SDK",
+  "license": "MIT",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:umd": "node build-umd.js",
+    "demo:quote": "node examples/demo-quote.js",
+    "demo:claim:half": "node examples/demo-pending-claim-half.js",
+    "demo:swap:buy": "node examples/demo-swap-buy.js",
+    "demo:swap:buy:ref": "node examples/demo-swap-buy-referral.js",
+    "demo:swap:sell": "node examples/demo-swap-sell.js",
+    "demo:swap:sell:ref": "node examples/demo-swap-sell-referral.js",
+    "demo:referral:pending": "node examples/demo-referral-pending.js",
+    "demo:claim:native": "node examples/demo-claim-native.js",
+    "demo:claim:half:ctk": "node examples/demo-claim-half-ctk.js",
+    "demo:claim:percentage": "node examples/demo-claim-percentage.js",
+    "demo:swap:buy:path": "node examples/demo-swap-buy-path.js",
+    "demo:claim:half:path": "node examples/demo-claim-path-half-ctk.js",
+    "demo:swap:buy:path:multi": "node examples/demo-swap-buy-path-multihop.js",
+  "demo:swap:buy:chain:model2": "node examples/demo-swap-buy-chain-model2.js",
+    "test:referral:swaps": "node examples/test-referral-swaps.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ctrackerceo/ctracker-sdk"
+  },
+  "keywords": ["defi","swap","referral","sdk","bsc","ethers","ctracker"],
+  "peerDependencies": {
+    "ethers": ">=6.8.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
