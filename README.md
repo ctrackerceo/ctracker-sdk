@@ -10,13 +10,54 @@ _Deterministic helpers · Multi‑level referrals · Claim flexible · BigInt fi
 ![Ethers v6](https://img.shields.io/badge/ethers-v6.x-6C47FF)
 ![Type Definitions](https://img.shields.io/badge/typed-.d.ts-informational)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
+![Downloads](https://img.shields.io/npm/dm/%40c-tracker%2Fsdk?color=orange)
+![Bundle Friendly](https://img.shields.io/badge/tree--shakable-yes-success)
 
 ```bash
+# npm
 npm install @c-tracker/sdk ethers
+
+# yarn (classic o berry)
+yarn add @c-tracker/sdk ethers
+
+# pnpm
+pnpm add @c-tracker/sdk ethers
 ```
-<sub>Instala también la peer dependency <code>ethers</code>. Requiere Node 18+.</sub>
+<sub>Instala también la peer dependency <code>ethers</code>. Compatible con npm, Yarn y PNPM. Requiere Node 18+.</sub>
 
 </div>
+
+## Quick Start (60 segundos)
+```ts
+import { initContracts, quoteBest, swapETHForToken } from '@c-tracker/sdk'
+import { BrowserProvider, ethers } from 'ethers'
+
+async function main(){
+  const provider = new BrowserProvider(window.ethereum)
+  await provider.send('eth_requestAccounts', [])
+  const signer = await provider.getSigner()
+  const { core, referral } = initContracts({
+    coreAddress: process.env.NEXT_PUBLIC_CORE_V4!,
+    referralAddress: process.env.NEXT_PUBLIC_REFERRAL_V4!,
+    provider,
+    signer
+  })
+  const amountIn = ethers.parseEther('0.1')
+  const WNATIVE = process.env.NEXT_PUBLIC_WNATIVE_V4!
+  const TOKEN_OUT = process.env.NEXT_PUBLIC_CTK_TOKEN!
+  const q = await quoteBest(core, amountIn, WNATIVE, TOKEN_OUT)
+  console.log('Quote amountOut:', q.amountOut.toString())
+  await swapETHForToken({ core, tokenOut: TOKEN_OUT, amountInWei: amountIn, referralModelId: 2, referrer: '0xReferrer...' })
+}
+main().catch(console.error)
+```
+Checklist mínimo:
+1. Instala paquete + ethers
+2. Define variables de entorno (CORE_V4, REFERRAL_V4, WNATIVE_V4, CTK_TOKEN)
+3. Llama `initContracts`
+4. Obtén quote (opcional) y ejecuta swap
+5. Usa helpers de claim cuando haya pending
+
 
 ---
 ## Table of Contents
