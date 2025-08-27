@@ -1,18 +1,22 @@
-# C-Tracker V4 SDK / API Documentation
+<div align="center">
 
-<p align="center">
-  <strong>Enterprise‑grade swap + referral + fee toolkit for EVM ecosystems</strong><br/>
-  <em>Deterministic helpers · Multi‑level referrals · Accurate post‑swap reconciliation</em>
-</p>
+# C-Tracker V4 SDK
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/@ctracker/sdk"><img alt="npm version" src="https://img.shields.io/npm/v/%40ctracker%2Fsdk?color=3B82F6&label=npm"/></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg"/></a>
-  <img alt="Node >=18" src="https://img.shields.io/badge/node-%3E%3D18-blue"/>
-  <img alt="Ethers v6" src="https://img.shields.io/badge/ethers-v6.x-6C47FF"/>
-  <img alt="CI" src="https://img.shields.io/badge/build-passing-success"/>
-  <img alt="TypeScript" src="https://img.shields.io/badge/typed-.d.ts-informational"/>
-</p>
+**Swap + Referral + Fees Toolkit para ecosistemas EVM**  
+_Deterministic helpers · Multi‑level referrals · Claim flexible · BigInt first_
+
+[![npm version](https://img.shields.io/npm/v/%40c-tracker%2Fsdk?color=3B82F6&label=npm)](https://www.npmjs.com/package/@c-tracker/sdk)
+![Node >=18](https://img.shields.io/badge/node-%3E%3D18-blue)
+![Ethers v6](https://img.shields.io/badge/ethers-v6.x-6C47FF)
+![Type Definitions](https://img.shields.io/badge/typed-.d.ts-informational)
+![License MIT](https://img.shields.io/badge/license-MIT-green)
+
+```bash
+npm install @c-tracker/sdk ethers
+```
+<sub>Instala también la peer dependency <code>ethers</code>. Requiere Node 18+.</sub>
+
+</div>
 
 ---
 ## Table of Contents
@@ -128,18 +132,17 @@ Types (see `index.d.ts`).
 
 ---
 ## 8. Installation Options
-### A) Local (Monorepo style)
+### A) Direct (NPM / Yarn / PNPM)
 ```
-// Use relative import
+npm install @c-tracker/sdk ethers
+// Usage example
 const api = require('./api');
 ```
 
-### B) Publish as NPM Package
-1. (Optional) Create `api/package.json` with name: `@ctracker/sdk`.
-2. Run `npm publish` from `api/` (ensure only distributable files included).
-3. Downstream project: `npm install @ctracker/sdk` and then:
+### B) Local (Monorepo / clon)
 ```
-import { initContracts, swapETHForToken } from '@ctracker/sdk';
+// Uso local sin publicar
+const api = require('./api');
 ```
 
 ### C) Direct Bundle (CDN)
@@ -582,10 +585,10 @@ CLAIM_PATH=0xWBNB,0xMID,0xCTK  # requerido si CLAIM_MODE=path
 Helper opcional para transformar `TIER_RULES_JSON` (string) a array validado:
 ```js
 const rules = parseTierRules(process.env.TIER_RULES_JSON);
-const tier = determineRequestedTier(volume, rules);
+import { initContracts, quoteBest, swapETHForToken, getPending, claimNative } from '@c-tracker/sdk';
 ```
 Si el JSON es inválido retorna `[]` silenciosamente.
-
+const { initContracts, getPending, claimToken, applySlippage, calcDeadline } = require('@c-tracker/sdk');
 Buenas prácticas adicionales:
 | Tema | Recomendación |
 |------|---------------|
