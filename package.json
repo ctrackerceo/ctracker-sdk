@@ -1,5 +1,5 @@
 {
-  "name": "@ctracker/sdk",
+  "name": "@c-tracker/sdk",
   "version": "1.0.0",
   "description": "C-Tracker V4 Swap + Referral SDK",
   "license": "MIT",
@@ -34,8 +34,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ctrackerceo/ctracker-sdk"
+    "url": "git+https://github.com/ctrackerceo/ctracker-sdk.git"
   },
+  "bugs": {
+    "url": "https://github.com/ctrackerceo/ctracker-sdk/issues"
+  },
+  "homepage": "https://github.com/ctrackerceo/ctracker-sdk#readme",
   "keywords": [
     "defi",
     "swap",
