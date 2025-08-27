@@ -2,8 +2,8 @@
 
 # C-Tracker V4 SDK
 
-**Swap + Referral + Fees Toolkit para ecosistemas EVM**  
-_Deterministic helpers · Multi‑level referrals · Claim flexible · BigInt first_
+**Swap + Referral + Fees Toolkit for EVM ecosystems**  
+_Deterministic helpers · Multi‑level referrals · Flexible claim options · BigInt first_
 
 [![npm version](https://img.shields.io/npm/v/%40c-tracker%2Fsdk?color=3B82F6&label=npm)](https://www.npmjs.com/package/@c-tracker/sdk)
 ![Node >=18](https://img.shields.io/badge/node-%3E%3D18-blue)
@@ -17,17 +17,17 @@ _Deterministic helpers · Multi‑level referrals · Claim flexible · BigInt fi
 # npm
 npm install @c-tracker/sdk ethers
 
-# yarn (classic o berry)
+# yarn (classic or berry)
 yarn add @c-tracker/sdk ethers
 
 # pnpm
 pnpm add @c-tracker/sdk ethers
 ```
-<sub>Instala también la peer dependency <code>ethers</code>. Compatible con npm, Yarn y PNPM. Requiere Node 18+.</sub>
+<sub>Also install the peer dependency <code>ethers</code>. Works with npm, Yarn and PNPM. Requires Node 18+.</sub>
 
 </div>
 
-## Quick Start (60 segundos)
+## Quick Start (60 seconds)
 ```ts
 import { initContracts, quoteBest, swapETHForToken } from '@c-tracker/sdk'
 import { BrowserProvider, ethers } from 'ethers'
@@ -51,12 +51,12 @@ async function main(){
 }
 main().catch(console.error)
 ```
-Checklist mínimo:
-1. Instala paquete + ethers
-2. Define variables de entorno (CORE_V4, REFERRAL_V4, WNATIVE_V4, CTK_TOKEN)
-3. Llama `initContracts`
-4. Obtén quote (opcional) y ejecuta swap
-5. Usa helpers de claim cuando haya pending
+Minimal checklist:
+1. Install package + ethers
+2. Set environment variables (CORE_V4, REFERRAL_V4, WNATIVE_V4, CTK_TOKEN)
+3. Call `initContracts`
+4. Get quote (optional) and execute swap
+5. Use claim helpers when there is pending balance
 
 
 ---
