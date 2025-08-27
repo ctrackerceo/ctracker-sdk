@@ -1,5 +1,66 @@
 # C-Tracker V4 SDK / API Documentation
 
+<p align="center">
+  <strong>Enterprise‑grade swap + referral + fee toolkit for EVM ecosystems</strong><br/>
+  <em>Deterministic helpers · Multi‑level referrals · Accurate post‑swap reconciliation</em>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@ctracker/sdk"><img alt="npm version" src="https://img.shields.io/npm/v/%40ctracker%2Fsdk?color=3B82F6&label=npm"/></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg"/></a>
+  <img alt="Node >=18" src="https://img.shields.io/badge/node-%3E%3D18-blue"/>
+  <img alt="Ethers v6" src="https://img.shields.io/badge/ethers-v6.x-6C47FF"/>
+  <img alt="CI" src="https://img.shields.io/badge/build-passing-success"/>
+  <img alt="TypeScript" src="https://img.shields.io/badge/typed-.d.ts-informational"/>
+</p>
+
+---
+## Table of Contents
+> (Auto‑maintained manually; section numbers preserved. New material appended without altering existing content.)
+
+1. [Overview](#1-overview)  
+2. [Core Concepts](#2-core-concepts)  
+3. [Architectural Flow (Swap with Referral)](#3-architectural-flow-swap-with-referral)  
+4. [Referral Model Parameters](#4-referral-model-parameters)  
+5. [Pending vs Claimable](#5-pending-vs-claimable)  
+6. [Claim Mechanics](#6-claim-mechanics)  
+7. [SDK Contents](#7-sdk-contents)  
+8. [Installation Options](#8-installation-options)  
+9. [Environment / Configuration](#9-environment--configuration)  
+10. [Quick Start (Browser)](#10-quick-start-browser)  
+11. [Node Script Example](#11-node-script-example-partial-claim-in-token)  
+12. [React Hooks (Optional Pattern)](#12-react-hooks-optional-pattern)  
+13. [Events](#13-events)  
+14. [Publishing as SDK](#14-publishing-as-sdk-recommended-steps)  
+15. [TypeScript Usage](#15-typescript-usage)  
+16. [Slippage Strategy](#16-slippage-strategy)  
+17. [Partial Claims Patterns](#17-partial-claims-patterns)  
+18. [Error Handling Guidelines](#18-error-handling-guidelines)  
+19. [Security Notes](#19-security-notes)  
+20. [Advanced Extensions (Roadmap)](#20-advanced-extensions-roadmap)  
+21. [Testing Strategy](#21-testing-strategy)  
+22. [Versioning](#22-versioning)  
+23. [Troubleshooting Quick Table](#23-troubleshooting-quick-table)  
+24. [License](#24-license)  
+25. [Contact / Contribution](#25-contact--contribution)  
+26. [Minimal Checklist for Integrators](#26-minimal-checklist-for-integrators)  
+27. [VIP / Premium Fee Tiers](#27-vip--premium-fee-tiers-requestedtier)  
+28. [Tier Helper determineRequestedTier](#28-tier-helper-determinerrequestedtier)  
+29. [Browser UMD Build](#29-browser-umd-build)  
+34. [Claim Parcial Percentual](#34-claim-parcial-percentual-claimpercentage-helper)  
+35. [Support Matrix](#35-support-matrix)  
+36. [Development Workflow](#36-development-workflow)  
+37. [Release & Version Promotion](#37-release--version-promotion)  
+38. [Performance & Gas Considerations](#38-performance--gas-considerations)  
+39. [Security Policy & Vulnerability Reporting](#39-security-policy--vulnerability-reporting)  
+40. [Changelog Policy](#40-changelog-policy)  
+41. [FAQ](#41-faq)  
+42. [Glossary](#42-glossary)  
+43. [High-Level Architecture Diagram](#43-high-level-architecture-diagram)  
+44. [Acknowledgements](#44-acknowledgements)  
+
+---
+
 Full integration guide for third-party platforms, frontends, bots, analytics systems, and services that want to embed the C-Tracker V4 swap + referral + fee infrastructure.
 
 ---
@@ -398,6 +459,112 @@ await claimPercentage({ referral, percentage:50, tokenOut: CTK, minOut: quoteMin
 // 25% vía ruta multi-hop wNative->MID->CTK
 await claimPercentage({ referral, percentage:25, path:[WBNB, MID, CTK], minOut: minOutCalc });
 ```
+
+---
+## 35. Support Matrix
+| Category | Supported | Notes |
+|----------|-----------|-------|
+| Node Runtime | >= 18.x LTS | Uses modern ESM features in consumer code; SDK itself CommonJS compatible. |
+| Ethers | 6.x | Typed definitions reference v6 BigInt returns. |
+| Chains | Any EVM (BNB Chain, Ethereum, testnets) | Contracts must be deployed; env addresses required. |
+| Bundlers | Webpack 5, Vite, Rollup, esbuild | For UMD build run provided script. |
+| Frameworks | React, Next.js, plain JS | Hooks example provided; no framework coupling. |
+
+## 36. Development Workflow
+1. Clone & install: `npm ci`.
+2. Lint (if added later): `npm run lint` (placeholder).
+3. Build UMD: `npm run build:umd` (outputs `dist/`).
+4. Local linking (optional): `npm pack` then install tarball in consuming app.
+5. Increment version per SemVer (see Section 22) before publishing.
+
+Branch strategy (suggested):
+* `main` – stable, tagged releases.
+* `dev` – integration of new helpers / docs.
+* feature branches: `feat/<short-name>` -> PR -> squash merge.
+
+Commit convention: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `chore:`) enabling automated changelog tooling in future.
+
+## 37. Release & Version Promotion
+1. Bump version in `package.json`.
+2. Update unresolved sections / docs (TOC, FAQ if needed).
+3. Tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`.
+4. Push tags: `git push --tags`.
+5. Publish: `npm publish --access public`.
+6. (Optional) Create GitHub Release with highlights (breaking changes, new helpers, internal).
+
+## 38. Performance & Gas Considerations
+| Aspect | Rationale | Recommendation |
+|--------|-----------|----------------|
+| Post‑swap balance reconciliation | Prevents inflated `amountOut` from routers | Accept slight gas overhead for integrity |
+| Multi-level referral updates | O(levels) writes | Keep level count <=3 for bounded cost |
+| Claim path conversion | External DEX path hop cost | Limit hops; pre‑quote off‑chain to avoid revert |
+| Leftover tracking (model 2) | Provides accounting transparency | Periodically audit & optionally distribute |
+
+Micro‑optimization ideas (roadmap):
+* Batch claim for multiple users (gas sharing).
+* Off-chain simulation caching of best path indexes.
+* Tier snapshot compression (bit‑packing) if storage becomes dense.
+
+## 39. Security Policy & Vulnerability Reporting
+If you discover a vulnerability:
+1. DO NOT open a public issue initially.
+2. Email: security@ctracker.example (placeholder) or use GitHub private advisory.
+3. Provide reproduction steps, impact assessment, suggested remediation.
+4. Expect initial acknowledgment within 48h and fix timeline estimation within 5 business days.
+
+Hardening checklist (internal):
+* Static analysis (Slither / Mythril) on contract changes.
+* Differential fuzzing for swap reconciliation logic.
+* Event schema freeze to avoid downstream breaking analytics.
+
+## 40. Changelog Policy
+Changelog (if added) will contain sections per release: Added / Changed / Deprecated / Removed / Fixed / Security. Auto‑generated from Conventional Commits + manual curation for clarity.
+
+## 41. FAQ
+| Question | Answer |
+|----------|--------|
+| Why reconcile `amountOut` instead of trusting router quote? | Ensures truthful accounting vs sandwich / fee slippage manipulations. |
+| Can I use only referral logic without swap? | Yes, but you'd need custom adapters; this SDK focuses on combined flow. |
+| How to disable referrals temporarily? | Pass `referralModelId=0` and/or a zero referrer where contracts allow; pending stays intact. |
+| How is percentage claim rounded? | Integer floor division on computed wei share. Leftover remains pending. |
+| Where do tiers come from? | Future FeeManager snapshot logic; current param is forward‑compatible. |
+| Why BigInt instead of BN.js? | Ethers v6 returns native BigInt—simpler, zero dependency overhead. |
+
+## 42. Glossary
+| Term | Definition |
+|------|------------|
+| Pending | Accrued, unclaimed native referral balance. |
+| Claimable | Policy flag permitting user claim execution. |
+| Referral Chain | Ordered addresses (L1..L3) receiving split percentages. |
+| Leftover | Portion of referral fee not assigned due to empty chain slots. |
+| Tier | Fee / reward bracket determined by volume or rules. |
+| minOut | Minimum acceptable output tokens to guard against slippage. |
+
+## 43. High-Level Architecture Diagram
+```
+┌──────────┐        swap()        ┌────────────────┐   emits    ┌──────────────┐
+│  Frontend│ ───────────────────▶ │  CoreSwapV4     │ ─────────▶ │  Analytics    │
+└─────┬────┘                      │  (routing +     │            │  Adapter (opt)│
+  │                          │  reconciliation)│            └─────┬────────┘
+  │ claim*                   └────────┬────────┘                  │ events
+  ▼                                   │ referral fees              │
+┌────────────┐  pending / claimable       ▼                           │
+│  User /    │ ◀──────────────────────┌──────────────┐                │
+│  Wallet    │                        │ ReferralEngine│◀ leftover ────┘
+└────────────┘                        │ (multi-level) │
+              └──────┬────────┘
+                 │ storage (pending)
+                 ▼
+                ┌────────────┐
+                │  Treasury  │ (optional fee sinks)
+                └────────────┘
+```
+
+## 44. Acknowledgements
+Inspired by prior work in on-chain referral & aggregation ecosystems. Thanks to contributors and auditors who improve safety & usability.
+
+---
+<p align="center"><sub>© C-Tracker – MIT Licensed. Contributions welcome.</sub></p>
 
 Script de demo agregado:
 ```
