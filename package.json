@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "C-Tracker V4 Swap + Referral SDK",
   "license": "MIT",
+  "author": "maestrodilan",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
@@ -21,7 +22,7 @@
     "demo:swap:buy:path": "node examples/demo-swap-buy-path.js",
     "demo:claim:half:path": "node examples/demo-claim-path-half-ctk.js",
     "demo:swap:buy:path:multi": "node examples/demo-swap-buy-path-multihop.js",
-  "demo:swap:buy:chain:model2": "node examples/demo-swap-buy-chain-model2.js",
+    "demo:swap:buy:chain:model2": "node examples/demo-swap-buy-chain-model2.js",
     "test:referral:swaps": "node examples/test-referral-swaps.js"
   },
   "devDependencies": {
@@ -35,7 +36,15 @@
     "type": "git",
     "url": "https://github.com/ctrackerceo/ctracker-sdk"
   },
-  "keywords": ["defi","swap","referral","sdk","bsc","ethers","ctracker"],
+  "keywords": [
+    "defi",
+    "swap",
+    "referral",
+    "sdk",
+    "bsc",
+    "ethers",
+    "ctracker"
+  ],
   "peerDependencies": {
     "ethers": ">=6.8.0"
   },
