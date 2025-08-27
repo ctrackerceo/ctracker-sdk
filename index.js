@@ -58,6 +58,7 @@ const FeeManagerV4_ABI = [
 const ReferralEngineV4_ABI = [
   'function pendingReferral(address) view returns (uint256)',
   'function totalPendingReferral() view returns (uint256)',
+  'function getReferralModel(uint256 id) view returns (tuple(uint256 id,uint16[] levelBps,bool active,uint8 levels,bool locked))',
   'function referralUserSnapshot(address user,address feeManager) view returns (bool claimable,uint256 pending,address l1,address l2,address l3,uint8 tier,uint256 volume)',
   'function claimReferral(uint256 amount,address tokenOut,uint256 minOut,uint256 deadline,address recipient) returns (uint256)',
   'function claimReferralPath(uint256 amount,address[] path,uint256 minOut,uint256 deadline,address recipient) returns (uint256)',
@@ -197,41 +198,80 @@ async function _getPlatformFeeBp(feeManager, user){
   } catch { return 0; }
 }
 
-async function quoteBuy({ core, feeManager, user, amountInWei, tokenOut, wNative, slippageBps=800 }){
+async function quoteBuy({ core, feeManager, user, amountInWei, tokenOut, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
   let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
   if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netForSwap:0n, estimatedOut:0n, minOut:0n };
   const [, , grossOut] = await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (amountInWei * BigInt(platformFeeBP)) / 10000n; // aplicado sobre amountIn (fee base)
-  const netForSwap = amountInWei - platformFee; // referralFee asumido 0 para no-referral
+  // Referral fee (modelo 0: 1 nivel) si referrer no es zero y model activo
+  let referralFeeBP = 0;
+  if (referrer && referrer !== ethers.ZeroAddress && referralEngine && (referralModelId===0 || referralModelId===2)) {
+    try {
+      const model = await referralEngine.getReferralModel(referralModelId===2?2:0);
+      if (model && model.active) {
+        // Para modelo 0 (un nivel) tomamos levelBps[0]; para modelo 2 sólo consideramos primer nivel si sólo hay L1
+        const levelArr = model.levelBps || [];
+        if (Array.isArray(levelArr) && levelArr.length>0) referralFeeBP = levelArr[0];
+      }
+    } catch { /* ignore */ }
+  }
+  const referralFee = (amountInWei * BigInt(referralFeeBP)) / 10000n;
+  const netForSwap = amountInWei - platformFee - referralFee;
   // Aproximación lineal: output escala lineal con input efectiva
   const estimatedOut = grossOut === 0n ? 0n : (grossOut * netForSwap) / amountInWei;
   const minOut = applySlippage(estimatedOut, slippageBps);
-  return { grossQuote: grossOut, platformFeeBP, platformFee, netForSwap, estimatedOut, minOut };
+  const priceImpactPct = grossOut === 0n ? 0 : Number(((grossOut - estimatedOut) * 10000n) / (grossOut === 0n ? 1n : grossOut)) / 100; // %
+  return { grossQuote: grossOut, platformFeeBP, platformFee, referralFeeBP, referralFee, netForSwap, estimatedOut, minOut, priceImpactPct };
 }
 
-async function quoteSell({ core, feeManager, user, amountInTokenWei, tokenIn, wNative, slippageBps=800 }){
+async function quoteSell({ core, feeManager, user, amountInTokenWei, tokenIn, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
   let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
   if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netOut:0n, minOut:0n };
   const [, , grossOut] = await core.quoteBestPath(amountInTokenWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (grossOut * BigInt(platformFeeBP)) / 10000n; // fee sobre salida nativa
-  const netOut = grossOut - platformFee; // referralFee asumido 0
-  const minOut = applySlippage(netOut, slippageBps);
-  return { grossQuote: grossOut, platformFeeBP, platformFee, netOut, minOut };
+  let referralFeeBP = 0;
+  if (referrer && referrer !== ethers.ZeroAddress && referralEngine && (referralModelId===0 || referralModelId===2)) {
+    try {
+      const model = await referralEngine.getReferralModel(referralModelId===2?2:0);
+      if (model && model.active) {
+        const levelArr = model.levelBps || [];
+        if (Array.isArray(levelArr) && levelArr.length>0) referralFeeBP = levelArr[0];
+      }
+    } catch { /* ignore */ }
+  }
+  const referralFee = (grossOut * BigInt(referralFeeBP)) / 10000n;
+  const netOutBeforeSlip = grossOut - platformFee - referralFee;
+  const minOut = applySlippage(netOutBeforeSlip, slippageBps);
+  const priceImpactPct = grossOut === 0n ? 0 : Number(((grossOut - netOutBeforeSlip) * 10000n) / (grossOut === 0n ? 1n : grossOut)) / 100;
+  return { grossQuote: grossOut, platformFeeBP, platformFee, referralFeeBP, referralFee, netOut: netOutBeforeSlip, minOut, priceImpactPct };
 }
 
-async function quoteTokenForToken({ core, feeManager, user, amountInWei, tokenIn, tokenOut, wNative, slippageBps=800 }){
+async function quoteTokenForToken({ core, feeManager, user, amountInWei, tokenIn, tokenOut, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
   // Replica lógica: leg1 tokenIn->wNative, fee sobre wOut, leg2 native->tokenOut
   let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
   if(!wNativeAddr) return { leg1Out:0n, platformFee:0n, netNative:0n, leg2Out:0n, minOut:0n };
   const [, , leg1Out] = await core.quoteBestPath(amountInWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (leg1Out * BigInt(platformFeeBP)) / 10000n; // fee sobre salida wNative (se unwrappa)
-  const netNative = leg1Out - platformFee; // referralFee asumido 0
+  let referralFeeBP = 0;
+  if (referrer && referrer !== ethers.ZeroAddress && referralEngine && (referralModelId===0 || referralModelId===2)) {
+    try {
+      const model = await referralEngine.getReferralModel(referralModelId===2?2:0);
+      if (model && model.active) {
+        const levelArr = model.levelBps || [];
+        if (Array.isArray(levelArr) && levelArr.length>0) referralFeeBP = levelArr[0];
+      }
+    } catch { /* ignore */ }
+  }
+  const referralFee = (leg1Out * BigInt(referralFeeBP)) / 10000n;
+  const netNative = leg1Out - platformFee - referralFee;
   const [, , leg2Out] = await core.quoteBestPath(netNative, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const minOut = applySlippage(leg2Out, slippageBps);
-  return { leg1Out, platformFeeBP, platformFee, netNative, leg2Out, minOut };
+  const combinedGrossDestination = leg2Out === 0n ? 0n : leg2Out + platformFee + referralFee; // aproximado para impacto
+  const priceImpactPct = combinedGrossDestination === 0n ? 0 : Number(((combinedGrossDestination - leg2Out) * 10000n) / (combinedGrossDestination === 0n ? 1n : combinedGrossDestination)) / 100;
+  return { leg1Out, platformFeeBP, platformFee, referralFeeBP, referralFee, netNative, leg2Out, minOut, priceImpactPct };
 }
 
 /** ---------------------------------------------------------------------------
