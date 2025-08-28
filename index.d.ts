@@ -7,7 +7,8 @@ export interface InitConfig {
   coreAddress: string;
   referralAddress: string;
   feeManagerAddress?: string;
-  wNative?: string;
+  // wNative must be provided explicitly (Core ABI no longer exposes wNative())
+  wNative?: string; // optional here for backward config objects, but helpers will throw if absent when required
   provider: ethers.Provider;
   signer?: ethers.Signer;
 }
@@ -36,7 +37,7 @@ export interface SwapETHForTokenArgs {
   core: ethers.Contract;
   tokenOut: string;
   amountInWei: bigint;
-  wNative?: string;
+  wNative: string; // required >=1.1.0
   slippageBps?: number; // default 800 (8%)
   referralModelId?: number;
   referrer?: string;
@@ -50,7 +51,7 @@ export interface SwapETHForTokenChainArgs {
   tokenOut: string;
   amountInWei: bigint;
   refChain: [string,string,string]; // explicit referral chain (use zeros if missing levels)
-  wNative?: string;
+  wNative: string; // required >=1.1.0
   slippageBps?: number;
   referralModelId?: number; // normally 2
   requestedTier?: number;

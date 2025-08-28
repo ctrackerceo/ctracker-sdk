@@ -22,6 +22,8 @@ const { ethers } = require('ethers');
  * CONFIG / CONSTANTES
  * --------------------------------------------------------------------------*/
 const DEFAULT_DEADLINE_SECS = 600; // 10 minutos
+// Current mainnet Core address (BNB Chain) after fee-on-transfer sell fallback redeploy
+const MAINNET_CORE_CURRENT = '0xfF2B8a49Df43ed103B67f6F8E72F049aD8f330Ba';
 
 /**
  * Estructura esperada del objeto config pasado a initContracts:
@@ -35,12 +37,12 @@ const DEFAULT_DEADLINE_SECS = 600; // 10 minutos
  * }
  */
 
+// ABI actualizado: Core ya no expone getter público wNative().
+// El SDK usará wNative provisto en config o variable externa.
 const CoreSwapV4_ABI = [
   'event SwapExecuted(address indexed user,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut,uint256 platformFee,uint256 referralFee,uint256 modelId,uint8 tier,address router,uint256 timestamp)',
   'function quoteBestPath(uint256 amountIn,address tokenIn,address tokenOut) view returns (address router,address[] path,uint256 amountOut)',
-  'function wNative() view returns (address)',
   'function swapETHForToken(address tokenOut,uint256 minOut,uint256 deadline,uint256 referralModelId,address referrer,uint256 requestedTier,address recipient) payable',
-  // Nueva variante explícita para modelo 2 (cadena completa refChain[3])
   'function swapETHForTokenChain(address tokenOut,uint256 minOut,uint256 deadline,uint256 referralModelId,address[3] refChain,uint256 requestedTier,address recipient) payable',
   'function swapTokenForETH(address tokenIn,uint256 amountIn,uint256 minOut,uint256 deadline,uint256 referralModelId,address referrer,uint256 requestedTier,address recipient)',
   'function swapTokenForToken(address tokenIn,address tokenOut,uint256 amountIn,uint256 minOut,uint256 deadline,uint256 referralModelId,address referrer,uint256 requestedTier,address recipient)',
@@ -141,12 +143,10 @@ async function quoteBest(core, amountInWei, tokenIn, tokenOut){
 }
 
 async function swapETHForToken({ core, tokenOut, amountInWei, wNative, slippageBps=800, referralModelId=0, referrer=ethers.ZeroAddress, requestedTier=0, recipient=ethers.ZeroAddress }){
-  // Determina tokenIn como wNative (wrapped) para quote
-  let wNativeAddr = wNative;
-  if(!wNativeAddr){
-    try { wNativeAddr = await core.wNative(); } catch { /* ignore */ }
-  }
-  const quote = wNativeAddr ? await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n})) : { amountOut:0n };
+  // Requiere wNative explícito (no getter). Si no se pasa aborta para evitar quote inválida.
+  const wNativeAddr = wNative;
+  if(!wNativeAddr) throw new Error('wNative requerido (pasar args.wNative)');
+  const quote = await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n}));
   const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n; // Nota: minOut sobre output estimado bruto; para slippage muy bajo considerar usar quoteBuy.
   const deadline = calcDeadline();
   const tx = await core.swapETHForToken(tokenOut, minOut, deadline, referralModelId, referrer, requestedTier, recipient, { value: amountInWei });
@@ -160,8 +160,8 @@ async function swapETHForToken({ core, tokenOut, amountInWei, wNative, slippageB
  */
 async function swapETHForTokenChain({ core, tokenOut, amountInWei, refChain, wNative, slippageBps=800, referralModelId=2, requestedTier=0, recipient=ethers.ZeroAddress }){
   if(!Array.isArray(refChain) || refChain.length !== 3) throw new Error('refChain debe tener length 3');
-  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
-  const quote = wNativeAddr ? await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>({amountOut:0n})) : { amountOut:0n };
+  if(!wNative) throw new Error('wNative requerido');
+  const quote = await core.quoteBestPath(amountInWei, wNative, tokenOut).catch(()=>({amountOut:0n}));
   const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n;
   const deadline = calcDeadline();
   const tx = await core.swapETHForTokenChain(tokenOut, minOut, deadline, referralModelId, refChain, requestedTier, recipient, { value: amountInWei });
@@ -199,9 +199,8 @@ async function _getPlatformFeeBp(feeManager, user){
 }
 
 async function quoteBuy({ core, feeManager, user, amountInWei, tokenOut, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
-  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
-  if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netForSwap:0n, estimatedOut:0n, minOut:0n };
-  const [, , grossOut] = await core.quoteBestPath(amountInWei, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  if(!wNative) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netForSwap:0n, estimatedOut:0n, minOut:0n };
+  const [, , grossOut] = await core.quoteBestPath(amountInWei, wNative, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (amountInWei * BigInt(platformFeeBP)) / 10000n; // aplicado sobre amountIn (fee base)
   // Referral fee (modelo 0: 1 nivel) si referrer no es zero y model activo
@@ -226,9 +225,8 @@ async function quoteBuy({ core, feeManager, user, amountInWei, tokenOut, wNative
 }
 
 async function quoteSell({ core, feeManager, user, amountInTokenWei, tokenIn, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
-  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
-  if(!wNativeAddr) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netOut:0n, minOut:0n };
-  const [, , grossOut] = await core.quoteBestPath(amountInTokenWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  if(!wNative) return { grossQuote:0n, platformFeeBP:0, platformFee:0n, netOut:0n, minOut:0n };
+  const [, , grossOut] = await core.quoteBestPath(amountInTokenWei, tokenIn, wNative).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (grossOut * BigInt(platformFeeBP)) / 10000n; // fee sobre salida nativa
   let referralFeeBP = 0;
@@ -249,10 +247,8 @@ async function quoteSell({ core, feeManager, user, amountInTokenWei, tokenIn, wN
 }
 
 async function quoteTokenForToken({ core, feeManager, user, amountInWei, tokenIn, tokenOut, wNative, slippageBps=800, referralEngine, referralModelId, referrer }){
-  // Replica lógica: leg1 tokenIn->wNative, fee sobre wOut, leg2 native->tokenOut
-  let wNativeAddr = wNative; if(!wNativeAddr){ try { wNativeAddr = await core.wNative(); } catch {} }
-  if(!wNativeAddr) return { leg1Out:0n, platformFee:0n, netNative:0n, leg2Out:0n, minOut:0n };
-  const [, , leg1Out] = await core.quoteBestPath(amountInWei, tokenIn, wNativeAddr).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  if(!wNative) return { leg1Out:0n, platformFee:0n, netNative:0n, leg2Out:0n, minOut:0n };
+  const [, , leg1Out] = await core.quoteBestPath(amountInWei, tokenIn, wNative).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const platformFeeBP = await _getPlatformFeeBp(feeManager, user);
   const platformFee = (leg1Out * BigInt(platformFeeBP)) / 10000n; // fee sobre salida wNative (se unwrappa)
   let referralFeeBP = 0;
@@ -267,7 +263,7 @@ async function quoteTokenForToken({ core, feeManager, user, amountInWei, tokenIn
   }
   const referralFee = (leg1Out * BigInt(referralFeeBP)) / 10000n;
   const netNative = leg1Out - platformFee - referralFee;
-  const [, , leg2Out] = await core.quoteBestPath(netNative, wNativeAddr, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
+  const [, , leg2Out] = await core.quoteBestPath(netNative, wNative, tokenOut).catch(()=>[ethers.ZeroAddress, [], 0n]);
   const minOut = applySlippage(leg2Out, slippageBps);
   const combinedGrossDestination = leg2Out === 0n ? 0n : leg2Out + platformFee + referralFee; // aproximado para impacto
   const priceImpactPct = combinedGrossDestination === 0n ? 0 : Number(((combinedGrossDestination - leg2Out) * 10000n) / (combinedGrossDestination === 0n ? 1n : combinedGrossDestination)) / 100;
@@ -415,7 +411,8 @@ module.exports = {
   validateClaimToken,
   validateClaimPath,
   calcDeadline,
-  applySlippage
+  applySlippage,
+  MAINNET_CORE_CURRENT
 };
 
 /** ---------------------------------------------------------------------------

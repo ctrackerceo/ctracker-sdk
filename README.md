@@ -333,6 +333,8 @@ Recomendaciones:
 3. Mostrar al usuario la distribución resultante prevista (L1/L2 y leftover) antes de firmar.
 4. Si la UX exige edición de cadena, permitir reorder sólo antes del primer swap del usuario (después la cadena queda fijada internamente para ese trader en modelos legacy; la variante explícita fuerza la distribución en ese swap sin afectar encadenados previos).
 5. Para auditar uso de leftover, leer periódicamente `getGlobalLeftover` y `getModelLeftover(referral,2)`.
+6. (Nuevo en >=1.1.0) Core ya no expone `wNative()` getter público: el SDK exige que pases `wNative` explícitamente en helpers de quote/swap.
+7. (Nuevo en >=1.1.0) Ruta SELL tolerante a fee‑on‑transfer: internamente Core intenta primero `swapExactTokensForTokens` y si detecta fallo/retención usa fallback `swapExactTokensForTokensSupportingFeeOnTransferTokens`; el `amountOut` final siempre proviene del delta real de balance `wNative`.
 1. Fetch quote `amountOut`.
 2. Compute `minOut = applySlippage(amountOut, slippageBps)`.
 3. Higher volatility pairs => larger bps (e.g. 1000 = 10%).
@@ -563,6 +565,18 @@ Hardening checklist (internal):
 
 ## 40. Changelog Policy
 Changelog (if added) will contain sections per release: Added / Changed / Deprecated / Removed / Fixed / Security. Auto‑generated from Conventional Commits + manual curation for clarity.
+
+### 1.1.0 (Minor)
+ADDED:
+* Documentación de fallback SELL fee-on-transfer.
+* Requisito explícito de pasar `wNative` al SDK (se removió getter del ABI).
+CHANGED:
+* ABI sin `function wNative()`.
+* Validaciones lanzan error temprano si falta `wNative` en swaps/quotes ETH->Token.
+FIXED:
+* Consistencia docs vs comportamiento real (reconciliación nativa y fallback SELL).
+MIGRATION:
+* Si tu código dependía de `core.wNative()`, ahora pasa la dirección (ej: desde ENV `WNATIVE_V4`).
 
 ## 41. FAQ
 | Question | Answer |
