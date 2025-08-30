@@ -578,6 +578,51 @@ async function executeSwapNativeToTokenChain(tokenOut, amountIn, refChain, slipp
   });
 }
 
+// Referral claim wrapper functions - map to actual function names
+async function claimReferralNative({ referral, amount, recipient }) {
+  return await claimNative({ referral, amount, recipient });
+}
+
+async function claimReferralToken({ referral, tokenOut, amount, minOut, recipient, deadlineSecs }) {
+  return await claimToken({ referral, tokenOut, amount, minOut, recipient, deadlineSecs });
+}
+
+async function claimReferralPercentage({ referral, percentage, tokenOut, path, minOut, recipient }) {
+  return await claimPercentage({ referral, percentage, tokenOut, path, minOut, recipient });
+}
+
+// Referral functions - map to existing functions
+async function getPendingReferral(referral, user) {
+  return await getPending(referral, user);
+}
+
+// Helper function wrappers - copied from original API
+function parseConfig(configStr) {
+  if (!configStr) return {};
+  try {
+    return JSON.parse(configStr);
+  } catch (error) {
+    console.error('Error parsing config:', error);
+    return {};
+  }
+}
+
+function parseTierRules(str){
+  if(!str) return [];
+  let arr;
+  try { arr = JSON.parse(str); } catch { return []; }
+  if(!Array.isArray(arr)) return [];
+  return arr.filter(r=> r && (r.minVolume!==undefined) && (r.tier!==undefined));
+}
+
+async function getGlobalLeftover(referral){ 
+  return referral.leftoverReferral(); 
+}
+
+async function getModelLeftover(referral, modelId){ 
+  return referral.modelLeftover(modelId); 
+}
+
 // Global contracts storage for wrapper functions
 let globalContracts = null;
 
