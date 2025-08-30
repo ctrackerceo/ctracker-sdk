@@ -1,6 +1,6 @@
 {
   "name": "@c-tracker/sdk",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "C-Tracker V4 Swap + Referral SDK with ES modules and CommonJS support",
   "license": "MIT",
   "author": "maestrodilan",
@@ -40,6 +40,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@c-tracker/sdk": "^1.0.9",
     "dotenv": "^16.3.1"
   },
   "repository": {
