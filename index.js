@@ -540,54 +540,21 @@ async function getGlobalLeftover(referral){ return referral.leftoverReferral(); 
 async function getModelLeftover(referral, modelId){ return referral.modelLeftover(modelId); }
 
 /** ---------------------------------------------------------------------------
- * EXPORTS - Compatible con CommonJS y ES modules
+ * EXPORTS - Añadir funciones adicionales al export principal
  * --------------------------------------------------------------------------*/
-// Exportaciones principales
-const cTrackerSDK = {
-  // Core functions
-  initContracts,
-  // getBestQuote, // TODO: Implementar
-  // executeSwap, // TODO: Implementar
-  
-  // Quote functions
-  // getQuoteNativeToToken, // TODO: Implementar
-  // getQuoteTokenToNative, // TODO: Implementar
-  // getQuoteTokenToToken, // TODO: Implementar
-  
-  // Swap execution functions
-  // executeSwapNativeToToken, // TODO: Implementar
-  // executeSwapTokenToNative, // TODO: Implementar
-  // executeSwapTokenToToken, // TODO: Implementar
-  
-  // Path-based swaps
-  // executeSwapNativeToTokenPath, // TODO: Implementar
-  // executeSwapTokenToTokenPath, // TODO: Implementar
-  
-  // Chain swaps
-  // executeSwapNativeToTokenChain, // TODO: Implementar
-  
-  // Referral functions
-  getPendingReferral,
-  claimReferralNative,
-  claimReferralToken,
-  claimReferralPercentage,
-  
-  // Helper functions
-  parseConfig,
-  parseTierRules,
-  getGlobalLeftover,
-  getModelLeftover,
-  
-  // Constants
-  DEFAULT_DEADLINE_SECS,
-  MAINNET_CORE_CURRENT
-};
+// Añadir funciones referrales y helpers al módulo principal
+module.exports.getPendingReferral = getPendingReferral;
+module.exports.claimReferralNative = claimReferralNative;
+module.exports.claimReferralToken = claimReferralToken;
+module.exports.claimReferralPercentage = claimReferralPercentage;
+module.exports.parseConfig = parseConfig;
+module.exports.parseTierRules = parseTierRules;
+module.exports.getGlobalLeftover = getGlobalLeftover;
+module.exports.getModelLeftover = getModelLeftover;
+module.exports.DEFAULT_DEADLINE_SECS = DEFAULT_DEADLINE_SECS;
 
-// CommonJS export
-module.exports = cTrackerSDK;
-
-// Individual exports for better tree-shaking
-module.exports.initContracts = initContracts;
+// Individual exports ya están en el objeto principal, no hace falta duplicar
+// module.exports.initContracts = initContracts;  // Ya está en el objeto principal
 // module.exports.getBestQuote = getBestQuote; // TODO: Implementar
 // module.exports.executeSwap = executeSwap; // TODO: Implementar
 // module.exports.getQuoteNativeToToken = getQuoteNativeToToken; // TODO: Implementar
