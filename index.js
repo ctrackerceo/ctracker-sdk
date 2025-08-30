@@ -472,6 +472,57 @@ async function claimPercentage({ referral, percentage, tokenOut, path, minOut=0n
 module.exports.claimPercentage = claimPercentage;
 
 /** ---------------------------------------------------------------------------
+ * WRAPPER FUNCTIONS FOR EXPORTED NAMES
+ * --------------------------------------------------------------------------*/
+const claimReferralNative = claimNative;
+const claimReferralToken = claimToken;
+const claimReferralPercentage = claimPercentage;
+
+/** ---------------------------------------------------------------------------
+ * MISSING FUNCTIONS IMPLEMENTATION
+ * --------------------------------------------------------------------------*/
+
+// Parse config helper function
+function parseConfig(configStr) {
+  if (!configStr) return {};
+  try {
+    return JSON.parse(configStr);
+  } catch (error) {
+    console.error('Error parsing config:', error);
+    return {};
+  }
+}
+
+// Get pending referral function
+async function getPendingReferral(signer, referralAddress) {
+  try {
+    if (!signer || !referralAddress) {
+      throw new Error('signer and referralAddress required');
+    }
+    
+    // Use the existing referral contract
+    const referralContract = new ethers.Contract(
+      '0xYourReferralContractAddress', // TODO: Replace with actual address
+      ['function getPendingRewards(address) view returns (uint256)'],
+      signer
+    );
+    
+    const pendingAmount = await referralContract.getPendingRewards(referralAddress);
+    return {
+      pending: ethers.formatEther(pendingAmount),
+      success: true
+    };
+  } catch (error) {
+    console.error('Error getting pending referral:', error);
+    return {
+      pending: '0',
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/** ---------------------------------------------------------------------------
  * parseTierRules helper (string -> array validada)
  * --------------------------------------------------------------------------*/
 function parseTierRules(str){
@@ -495,25 +546,25 @@ async function getModelLeftover(referral, modelId){ return referral.modelLeftove
 const cTrackerSDK = {
   // Core functions
   initContracts,
-  getBestQuote,
-  executeSwap,
+  // getBestQuote, // TODO: Implementar
+  // executeSwap, // TODO: Implementar
   
   // Quote functions
-  getQuoteNativeToToken,
-  getQuoteTokenToNative, 
-  getQuoteTokenToToken,
+  // getQuoteNativeToToken, // TODO: Implementar
+  // getQuoteTokenToNative, // TODO: Implementar
+  // getQuoteTokenToToken, // TODO: Implementar
   
   // Swap execution functions
-  executeSwapNativeToToken,
-  executeSwapTokenToNative,
-  executeSwapTokenToToken,
+  // executeSwapNativeToToken, // TODO: Implementar
+  // executeSwapTokenToNative, // TODO: Implementar
+  // executeSwapTokenToToken, // TODO: Implementar
   
   // Path-based swaps
-  executeSwapNativeToTokenPath,
-  executeSwapTokenToTokenPath,
+  // executeSwapNativeToTokenPath, // TODO: Implementar
+  // executeSwapTokenToTokenPath, // TODO: Implementar
   
   // Chain swaps
-  executeSwapNativeToTokenChain,
+  // executeSwapNativeToTokenChain, // TODO: Implementar
   
   // Referral functions
   getPendingReferral,
@@ -537,18 +588,17 @@ module.exports = cTrackerSDK;
 
 // Individual exports for better tree-shaking
 module.exports.initContracts = initContracts;
-module.exports.initContracts = initContracts;
-module.exports.getBestQuote = getBestQuote;
-module.exports.executeSwap = executeSwap;
-module.exports.getQuoteNativeToToken = getQuoteNativeToToken;
-module.exports.getQuoteTokenToNative = getQuoteTokenToNative;
-module.exports.getQuoteTokenToToken = getQuoteTokenToToken;
-module.exports.executeSwapNativeToToken = executeSwapNativeToToken;
-module.exports.executeSwapTokenToNative = executeSwapTokenToNative;
-module.exports.executeSwapTokenToToken = executeSwapTokenToToken;
-module.exports.executeSwapNativeToTokenPath = executeSwapNativeToTokenPath;
-module.exports.executeSwapTokenToTokenPath = executeSwapTokenToTokenPath;
-module.exports.executeSwapNativeToTokenChain = executeSwapNativeToTokenChain;
+// module.exports.getBestQuote = getBestQuote; // TODO: Implementar
+// module.exports.executeSwap = executeSwap; // TODO: Implementar
+// module.exports.getQuoteNativeToToken = getQuoteNativeToToken; // TODO: Implementar
+// module.exports.getQuoteTokenToNative = getQuoteTokenToNative; // TODO: Implementar
+// module.exports.getQuoteTokenToToken = getQuoteTokenToToken; // TODO: Implementar
+// module.exports.executeSwapNativeToToken = executeSwapNativeToToken; // TODO: Implementar
+// module.exports.executeSwapTokenToNative = executeSwapTokenToNative; // TODO: Implementar
+// module.exports.executeSwapTokenToToken = executeSwapTokenToToken; // TODO: Implementar
+// module.exports.executeSwapNativeToTokenPath = executeSwapNativeToTokenPath; // TODO: Implementar
+// module.exports.executeSwapTokenToTokenPath = executeSwapTokenToTokenPath; // TODO: Implementar
+// module.exports.executeSwapNativeToTokenChain = executeSwapNativeToTokenChain; // TODO: Implementar
 module.exports.getPendingReferral = getPendingReferral;
 module.exports.claimReferralNative = claimReferralNative;
 module.exports.claimReferralToken = claimReferralToken;

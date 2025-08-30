@@ -5,11 +5,11 @@
   "license": "MIT",
   "author": "maestrodilan",
   "main": "index.js",
-  "module": "index.mjs",
+  "module": "index.esm.js",
   "types": "index.d.ts",
   "exports": {
     ".": {
-      "import": "./index.mjs",
+      "import": "./index.esm.js",
       "require": "./index.js",
       "types": "./index.d.ts"
     }
