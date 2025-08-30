@@ -123,6 +123,60 @@ function initContracts(cfg){
 }
 
 /** ---------------------------------------------------------------------------
+ * TOKEN APPROVAL HELPERS
+ * --------------------------------------------------------------------------*/
+async function ensureTokenApproval(tokenAddress, spenderAddress, amountWei, signer) {
+  if (tokenAddress === ethers.ZeroAddress || tokenAddress === '0x0000000000000000000000000000000000000000') {
+    // Native token doesn't need approval
+    return;
+  }
+  
+  const tokenContract = new ethers.Contract(tokenAddress, [
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+    'function balanceOf(address account) view returns (uint256)',
+    'function decimals() view returns (uint8)',
+    'function symbol() view returns (string)'
+  ], signer);
+  
+  const userAddress = await signer.getAddress();
+  const currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
+  
+  if (currentAllowance < amountWei) {
+    console.log('🔄 [ensureTokenApproval] Approving token...', {
+      token: tokenAddress,
+      amount: amountWei.toString(),
+      spender: spenderAddress,
+      currentAllowance: currentAllowance.toString()
+    });
+    
+    // Approve maximum amount for better UX (avoid repeated approvals)
+    const maxApproval = ethers.MaxUint256;
+    const approveTx = await tokenContract.approve(spenderAddress, maxApproval);
+    const receipt = await approveTx.wait();
+    
+    console.log('✅ [ensureTokenApproval] Token approved successfully', {
+      txHash: receipt.hash,
+      gasUsed: receipt.gasUsed?.toString()
+    });
+  }
+}
+
+async function getTokenBalance(tokenAddress, userAddress, provider) {
+  if (tokenAddress === ethers.ZeroAddress || tokenAddress === '0x0000000000000000000000000000000000000000') {
+    // Native token balance
+    return await provider.getBalance(userAddress);
+  }
+  
+  const tokenContract = new ethers.Contract(tokenAddress, [
+    'function balanceOf(address account) view returns (uint256)',
+    'function decimals() view returns (uint8)'
+  ], provider);
+  
+  return await tokenContract.balanceOf(userAddress);
+}
+
+/** ---------------------------------------------------------------------------
  * UTILS
  * --------------------------------------------------------------------------*/
 function calcDeadline(secondsAhead = DEFAULT_DEADLINE_SECS){
@@ -169,15 +223,47 @@ async function swapETHForTokenChain({ core, tokenOut, amountInWei, refChain, wNa
 }
 
 async function swapTokenForETH({ core, tokenIn, amountInWei, minOut=0n, referralModelId=0, referrer=ethers.ZeroAddress, requestedTier=0, recipient=ethers.ZeroAddress }){
+  const signer = core.runner;
+  if (!signer) throw new Error('Signer required for token swaps');
+  
+  // Ensure token approval before swap
+  await ensureTokenApproval(tokenIn, await core.getAddress(), amountInWei, signer);
+  
   const deadline = calcDeadline();
+  console.log('🔄 [swapTokenForETH] Executing swap...', {
+    tokenIn,
+    amountInWei: amountInWei.toString(),
+    minOut: minOut.toString(),
+    deadline,
+    referralModelId,
+    referrer
+  });
+  
   const tx = await core.swapTokenForETH(tokenIn, amountInWei, minOut, deadline, referralModelId, referrer, requestedTier, recipient);
   return tx.wait();
 }
 
 async function swapTokenForToken({ core, tokenIn, tokenOut, amountInWei, slippageBps=800, referralModelId=0, referrer=ethers.ZeroAddress, requestedTier=0, recipient=ethers.ZeroAddress }){
+  const signer = core.runner;
+  if (!signer) throw new Error('Signer required for token swaps');
+  
+  // Ensure token approval before swap
+  await ensureTokenApproval(tokenIn, await core.getAddress(), amountInWei, signer);
+  
   const quote = await core.quoteBestPath(amountInWei, tokenIn, tokenOut).catch(()=>({amountOut:0n}));
   const minOut = quote.amountOut ? applySlippage(quote.amountOut, slippageBps) : 0n;
   const deadline = calcDeadline();
+  
+  console.log('🔄 [swapTokenForToken] Executing swap...', {
+    tokenIn,
+    tokenOut,
+    amountInWei: amountInWei.toString(),
+    minOut: minOut.toString(),
+    deadline,
+    referralModelId,
+    referrer
+  });
+  
   const tx = await core.swapTokenForToken(tokenIn, tokenOut, amountInWei, minOut, deadline, referralModelId, referrer, requestedTier, recipient);
   return tx.wait();
 }
@@ -386,45 +472,10 @@ async function ejemplo(){
 */
 
 /** ---------------------------------------------------------------------------
- * EXPORTS
+ * MISSING FUNCTIONS IMPLEMENTATION
  * --------------------------------------------------------------------------*/
-module.exports = {
-  initContracts,
-  quoteBest,
-  swapETHForToken,
-  swapETHForTokenChain,
-  swapTokenForETH,
-  swapTokenForToken,
-  swapETHForTokenPath,
-  swapTokenForTokenPath,
-  quoteBuy,
-  quoteSell,
-  quoteTokenForToken,
-  getReferralSnapshot,
-  getPending,
-  hasClaimable,
-  getClaimableAmount,
-  claimNative,
-  claimToken,
-  claimPath,
-  validateReferralInputs,
-  validateClaimToken,
-  validateClaimPath,
-  calcDeadline,
-  applySlippage,
-  MAINNET_CORE_CURRENT
-};
 
-/** ---------------------------------------------------------------------------
- * TIER / VIP HELPERS
- * --------------------------------------------------------------------------*/
-/**
- * determineRequestedTier
- * Dado un volumen acumulado (bigint) y una lista de reglas [{ minVolume, tier }]
- * devuelve el tier más alto cuyo minVolume <= volume. Si no coincide, retorna 0.
- * Reglas pueden venir sin ordenar; empates se resuelven por tier numérico mayor.
- * minVolume acepta bigint o string (parseado a bigint).
- */
+// Determine tier based on volume and rules
 function determineRequestedTier(volume, rules){
   if (!rules || !Array.isArray(rules) || rules.length === 0) return 0;
   const vol = BigInt(volume);
@@ -439,13 +490,58 @@ function determineRequestedTier(volume, rules){
   return chosen;
 }
 
-module.exports.determineRequestedTier = determineRequestedTier;
-// Re-export config loader for external projects
-try { module.exports.loadApiConfig = require('./config').loadApiConfig; } catch {}
+// Get pending referral function
+async function getPendingReferral(referral, user) {
+  try {
+    if (!referral || !user) {
+      throw new Error('referral contract and user address required');
+    }
+    
+    const pendingAmount = await referral.pendingReferral(user);
+    return {
+      pending: ethers.formatEther(pendingAmount),
+      success: true
+    };
+  } catch (error) {
+    console.error('Error getting pending referral:', error);
+    return {
+      pending: '0',
+      success: false,
+      error: error.message
+    };
+  }
+}
 
-/** ---------------------------------------------------------------------------
- * CLAIM PERCENTAGE HELPER
- * --------------------------------------------------------------------------*/
+// Parse config helper function
+function parseConfig(configStr) {
+  if (!configStr) return {};
+  try {
+    return JSON.parse(configStr);
+  } catch (error) {
+    console.error('Error parsing config:', error);
+    return {};
+  }
+}
+
+// Parse tier rules helper (string -> array validada)
+function parseTierRules(str){
+  if(!str) return [];
+  let arr;
+  try { arr = JSON.parse(str); } catch { return []; }
+  if(!Array.isArray(arr)) return [];
+  return arr.filter(r=> r && (r.minVolume!==undefined) && (r.tier!==undefined));
+}
+
+// Leftover Helpers
+async function getGlobalLeftover(referral){ 
+  return referral.leftoverReferral(); 
+}
+
+async function getModelLeftover(referral, modelId){ 
+  return referral.modelLeftover(modelId); 
+}
+
+// Claim percentage helper
 async function claimPercentage({ referral, percentage, tokenOut, path, minOut=0n, recipient=ethers.ZeroAddress }){
   if (percentage <=0 || percentage > 100) throw new Error('percentage inválido');
   const me = recipient !== ethers.ZeroAddress ? recipient : undefined;
@@ -469,110 +565,49 @@ async function claimPercentage({ referral, percentage, tokenOut, path, minOut=0n
   const tx = await referral.claimReferral(amount, ethers.ZeroAddress, 0, deadline, recipient);
   return tx.wait();
 }
-module.exports.claimPercentage = claimPercentage;
 
-/** ---------------------------------------------------------------------------
- * WRAPPER FUNCTIONS FOR EXPORTED NAMES
- * --------------------------------------------------------------------------*/
+// Wrapper functions for exported names
 const claimReferralNative = claimNative;
 const claimReferralToken = claimToken;
 const claimReferralPercentage = claimPercentage;
 
-/** ---------------------------------------------------------------------------
- * MISSING FUNCTIONS IMPLEMENTATION
- * --------------------------------------------------------------------------*/
-
-// Parse config helper function
-function parseConfig(configStr) {
-  if (!configStr) return {};
-  try {
-    return JSON.parse(configStr);
-  } catch (error) {
-    console.error('Error parsing config:', error);
-    return {};
-  }
-}
-
-// Get pending referral function
-async function getPendingReferral(signer, referralAddress) {
-  try {
-    if (!signer || !referralAddress) {
-      throw new Error('signer and referralAddress required');
-    }
-    
-    // Use the existing referral contract
-    const referralContract = new ethers.Contract(
-      '0xYourReferralContractAddress', // TODO: Replace with actual address
-      ['function getPendingRewards(address) view returns (uint256)'],
-      signer
-    );
-    
-    const pendingAmount = await referralContract.getPendingRewards(referralAddress);
-    return {
-      pending: ethers.formatEther(pendingAmount),
-      success: true
-    };
-  } catch (error) {
-    console.error('Error getting pending referral:', error);
-    return {
-      pending: '0',
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-/** ---------------------------------------------------------------------------
- * parseTierRules helper (string -> array validada)
- * --------------------------------------------------------------------------*/
-function parseTierRules(str){
-  if(!str) return [];
-  let arr;
-  try { arr = JSON.parse(str); } catch { return []; }
-  if(!Array.isArray(arr)) return [];
-  return arr.filter(r=> r && (r.minVolume!==undefined) && (r.tier!==undefined));
-}
-
-/** ---------------------------------------------------------------------------
- * Leftover Helpers
- * --------------------------------------------------------------------------*/
-async function getGlobalLeftover(referral){ return referral.leftoverReferral(); }
-async function getModelLeftover(referral, modelId){ return referral.modelLeftover(modelId); }
-
-/** ---------------------------------------------------------------------------
- * EXPORTS - Añadir funciones adicionales al export principal
- * --------------------------------------------------------------------------*/
-// Añadir funciones referrales y helpers al módulo principal
-module.exports.getPendingReferral = getPendingReferral;
-module.exports.claimReferralNative = claimReferralNative;
-module.exports.claimReferralToken = claimReferralToken;
-module.exports.claimReferralPercentage = claimReferralPercentage;
-module.exports.parseConfig = parseConfig;
-module.exports.parseTierRules = parseTierRules;
-module.exports.getGlobalLeftover = getGlobalLeftover;
-module.exports.getModelLeftover = getModelLeftover;
-module.exports.DEFAULT_DEADLINE_SECS = DEFAULT_DEADLINE_SECS;
-
-// Individual exports ya están en el objeto principal, no hace falta duplicar
-// module.exports.initContracts = initContracts;  // Ya está en el objeto principal
-// module.exports.getBestQuote = getBestQuote; // TODO: Implementar
-// module.exports.executeSwap = executeSwap; // TODO: Implementar
-// module.exports.getQuoteNativeToToken = getQuoteNativeToToken; // TODO: Implementar
-// module.exports.getQuoteTokenToNative = getQuoteTokenToNative; // TODO: Implementar
-// module.exports.getQuoteTokenToToken = getQuoteTokenToToken; // TODO: Implementar
-// module.exports.executeSwapNativeToToken = executeSwapNativeToToken; // TODO: Implementar
-// module.exports.executeSwapTokenToNative = executeSwapTokenToNative; // TODO: Implementar
-// module.exports.executeSwapTokenToToken = executeSwapTokenToToken; // TODO: Implementar
-// module.exports.executeSwapNativeToTokenPath = executeSwapNativeToTokenPath; // TODO: Implementar
-// module.exports.executeSwapTokenToTokenPath = executeSwapTokenToTokenPath; // TODO: Implementar
-// module.exports.executeSwapNativeToTokenChain = executeSwapNativeToTokenChain; // TODO: Implementar
-module.exports.getPendingReferral = getPendingReferral;
-module.exports.claimReferralNative = claimReferralNative;
-module.exports.claimReferralToken = claimReferralToken;
-module.exports.claimReferralPercentage = claimReferralPercentage;
-module.exports.parseConfig = parseConfig;
-module.exports.parseTierRules = parseTierRules;
-module.exports.getGlobalLeftover = getGlobalLeftover;
-module.exports.getModelLeftover = getModelLeftover;
-module.exports.DEFAULT_DEADLINE_SECS = DEFAULT_DEADLINE_SECS;
-module.exports.MAINNET_CORE_CURRENT = MAINNET_CORE_CURRENT;
+// ES6 Module Exports - Compatible with "type": "module"
+export {
+  initContracts,
+  quoteBest,
+  swapETHForToken,
+  swapETHForTokenChain,
+  swapTokenForETH,
+  swapTokenForToken,
+  swapETHForTokenPath,
+  swapTokenForTokenPath,
+  quoteBuy,
+  quoteSell,
+  quoteTokenForToken,
+  getReferralSnapshot,
+  getPending,
+  hasClaimable,
+  getClaimableAmount,
+  claimNative,
+  claimToken,
+  claimPath,
+  validateReferralInputs,
+  validateClaimToken,
+  validateClaimPath,
+  calcDeadline,
+  applySlippage,
+  MAINNET_CORE_CURRENT,
+  determineRequestedTier,
+  getPendingReferral,
+  claimReferralNative,
+  claimReferralToken,
+  claimReferralPercentage,
+  parseConfig,
+  parseTierRules,
+  getGlobalLeftover,
+  getModelLeftover,
+  DEFAULT_DEADLINE_SECS,
+  claimPercentage,
+  ensureTokenApproval,
+  getTokenBalance
+};
