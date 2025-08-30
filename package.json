@@ -1,13 +1,23 @@
 {
   "name": "@c-tracker/sdk",
-  "version": "1.1.4",
-  "description": "C-Tracker V4 Swap + Referral SDK",
+  "version": "1.0.5",
+  "description": "C-Tracker V4 Swap + Referral SDK with ES modules and CommonJS support",
   "license": "MIT",
   "author": "maestrodilan",
   "main": "index.js",
+  "module": "index.mjs",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.mjs",
+      "require": "./index.js",
+      "types": "./index.d.ts"
+    }
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build": "npm run build:esm",
+    "build:esm": "node build-esm.js",
     "build:umd": "node build-umd.js",
     "demo:quote": "node examples/demo-quote.js",
     "demo:claim:half": "node examples/demo-pending-claim-half.js",
