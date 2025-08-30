@@ -386,255 +386,6 @@ async function ejemplo(){
 */
 
 /** ---------------------------------------------------------------------------
- * WRAPPER FUNCTIONS FOR FRONTEND COMPATIBILITY
- * --------------------------------------------------------------------------*/
-
-// Wrapper function that maps getBestQuote to quoteBest
-async function getBestQuote(amountIn, tokenIn, tokenOut) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await quoteBest(globalContracts.core, amountInWei, tokenIn, tokenOut);
-}
-
-// Wrapper function for executeSwap - determines swap type and calls appropriate function
-async function executeSwap(params) {
-  const { fromToken, toToken, amountIn, slippageBps, referralModelId, referrer, requestedTier, recipient } = params;
-  
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const isFromNative = fromToken === ethers.ZeroAddress;
-  const isToNative = toToken === ethers.ZeroAddress;
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  
-  if (isFromNative && !isToNative) {
-    // ETH to Token
-    return await swapETHForToken({ 
-      core: globalContracts.core, 
-      tokenOut: toToken, 
-      amountInWei, 
-      wNative: globalContracts.wNative,
-      slippageBps, 
-      referralModelId, 
-      referrer, 
-      requestedTier, 
-      recipient 
-    });
-  } else if (!isFromNative && isToNative) {
-    // Token to ETH
-    return await swapTokenForETH({ 
-      core: globalContracts.core, 
-      tokenIn: fromToken, 
-      amountInWei, 
-      referralModelId, 
-      referrer, 
-      requestedTier, 
-      recipient 
-    });
-  } else if (!isFromNative && !isToNative) {
-    // Token to Token
-    return await swapTokenForToken({ 
-      core: globalContracts.core, 
-      tokenIn: fromToken, 
-      tokenOut: toToken, 
-      amountInWei, 
-      slippageBps, 
-      referralModelId, 
-      referrer, 
-      requestedTier, 
-      recipient 
-    });
-  } else {
-    throw new Error('Swap ETH to ETH no soportado');
-  }
-}
-
-// Specific quote functions for different swap types
-async function getQuoteNativeToToken(amountIn, tokenOut) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await quoteBest(globalContracts.core, amountInWei, ethers.ZeroAddress, tokenOut);
-}
-
-async function getQuoteTokenToNative(amountIn, tokenIn) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await quoteBest(globalContracts.core, amountInWei, tokenIn, ethers.ZeroAddress);
-}
-
-async function getQuoteTokenToToken(amountIn, tokenIn, tokenOut) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await quoteBest(globalContracts.core, amountInWei, tokenIn, tokenOut);
-}
-
-// Specific execute functions for different swap types
-async function executeSwapNativeToToken(amountIn, tokenOut, slippageBps, referralModelId, referrer, requestedTier, recipient) {
-  return await executeSwap({
-    fromToken: ethers.ZeroAddress,
-    toToken: tokenOut,
-    amountIn,
-    slippageBps,
-    referralModelId,
-    referrer,
-    requestedTier,
-    recipient
-  });
-}
-
-async function executeSwapTokenToNative(tokenIn, amountIn, slippageBps, referralModelId, referrer, requestedTier, recipient) {
-  return await executeSwap({
-    fromToken: tokenIn,
-    toToken: ethers.ZeroAddress,
-    amountIn,
-    slippageBps,
-    referralModelId,
-    referrer,
-    requestedTier,
-    recipient
-  });
-}
-
-async function executeSwapTokenToToken(tokenIn, tokenOut, amountIn, slippageBps, referralModelId, referrer, requestedTier, recipient) {
-  return await executeSwap({
-    fromToken: tokenIn,
-    toToken: tokenOut,
-    amountIn,
-    slippageBps,
-    referralModelId,
-    referrer,
-    requestedTier,
-    recipient
-  });
-}
-
-// Path-based swap functions (if needed)
-async function executeSwapNativeToTokenPath(path, amountIn, slippageBps, referralModelId, referrer, requestedTier, recipient) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await swapETHForTokenPath({ 
-    core: globalContracts.core, 
-    path, 
-    amountInWei, 
-    slippageBps, 
-    referralModelId, 
-    referrer, 
-    requestedTier, 
-    recipient 
-  });
-}
-
-async function executeSwapTokenToTokenPath(path, amountIn, slippageBps, referralModelId, referrer, requestedTier, recipient) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await swapTokenForTokenPath({ 
-    core: globalContracts.core, 
-    path, 
-    amountInWei, 
-    slippageBps, 
-    referralModelId, 
-    referrer, 
-    requestedTier, 
-    recipient 
-  });
-}
-
-// Chain-based swap function
-async function executeSwapNativeToTokenChain(tokenOut, amountIn, refChain, slippageBps, referralModelId, requestedTier, recipient) {
-  if (!globalContracts?.core) {
-    throw new Error('SDK no inicializado - llama a initContracts() primero');
-  }
-  
-  const amountInWei = typeof amountIn === 'string' ? ethers.parseEther(amountIn) : amountIn;
-  return await swapETHForTokenChain({ 
-    core: globalContracts.core, 
-    tokenOut, 
-    amountInWei, 
-    refChain, 
-    wNative: globalContracts.wNative,
-    slippageBps, 
-    referralModelId, 
-    requestedTier, 
-    recipient 
-  });
-}
-
-// Referral claim wrapper functions - map to actual function names
-async function claimReferralNative({ referral, amount, recipient }) {
-  return await claimNative({ referral, amount, recipient });
-}
-
-async function claimReferralToken({ referral, tokenOut, amount, minOut, recipient, deadlineSecs }) {
-  return await claimToken({ referral, tokenOut, amount, minOut, recipient, deadlineSecs });
-}
-
-async function claimReferralPercentage({ referral, percentage, tokenOut, path, minOut, recipient }) {
-  return await claimPercentage({ referral, percentage, tokenOut, path, minOut, recipient });
-}
-
-// Referral functions - map to existing functions
-async function getPendingReferral(referral, user) {
-  return await getPending(referral, user);
-}
-
-// Helper function wrappers - copied from original API
-function parseConfig(configStr) {
-  if (!configStr) return {};
-  try {
-    return JSON.parse(configStr);
-  } catch (error) {
-    console.error('Error parsing config:', error);
-    return {};
-  }
-}
-
-function parseTierRules(str){
-  if(!str) return [];
-  let arr;
-  try { arr = JSON.parse(str); } catch { return []; }
-  if(!Array.isArray(arr)) return [];
-  return arr.filter(r=> r && (r.minVolume!==undefined) && (r.tier!==undefined));
-}
-
-async function getGlobalLeftover(referral){ 
-  return referral.leftoverReferral(); 
-}
-
-async function getModelLeftover(referral, modelId){ 
-  return referral.modelLeftover(modelId); 
-}
-
-// Global contracts storage for wrapper functions
-let globalContracts = null;
-
-// Override initContracts to store contracts globally
-const _originalInitContracts = initContracts;
-function initContractsEnhanced(config) {
-  const result = _originalInitContracts(config);
-  globalContracts = result;
-  return result;
-}
-
-/** ---------------------------------------------------------------------------
  * EXPORTS
  * --------------------------------------------------------------------------*/
 module.exports = {
@@ -721,6 +472,57 @@ async function claimPercentage({ referral, percentage, tokenOut, path, minOut=0n
 module.exports.claimPercentage = claimPercentage;
 
 /** ---------------------------------------------------------------------------
+ * WRAPPER FUNCTIONS FOR EXPORTED NAMES
+ * --------------------------------------------------------------------------*/
+const claimReferralNative = claimNative;
+const claimReferralToken = claimToken;
+const claimReferralPercentage = claimPercentage;
+
+/** ---------------------------------------------------------------------------
+ * MISSING FUNCTIONS IMPLEMENTATION
+ * --------------------------------------------------------------------------*/
+
+// Parse config helper function
+function parseConfig(configStr) {
+  if (!configStr) return {};
+  try {
+    return JSON.parse(configStr);
+  } catch (error) {
+    console.error('Error parsing config:', error);
+    return {};
+  }
+}
+
+// Get pending referral function
+async function getPendingReferral(signer, referralAddress) {
+  try {
+    if (!signer || !referralAddress) {
+      throw new Error('signer and referralAddress required');
+    }
+    
+    // Use the existing referral contract
+    const referralContract = new ethers.Contract(
+      '0xYourReferralContractAddress', // TODO: Replace with actual address
+      ['function getPendingRewards(address) view returns (uint256)'],
+      signer
+    );
+    
+    const pendingAmount = await referralContract.getPendingRewards(referralAddress);
+    return {
+      pending: ethers.formatEther(pendingAmount),
+      success: true
+    };
+  } catch (error) {
+    console.error('Error getting pending referral:', error);
+    return {
+      pending: '0',
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/** ---------------------------------------------------------------------------
  * parseTierRules helper (string -> array validada)
  * --------------------------------------------------------------------------*/
 function parseTierRules(str){
@@ -743,26 +545,26 @@ async function getModelLeftover(referral, modelId){ return referral.modelLeftove
 // Exportaciones principales
 const cTrackerSDK = {
   // Core functions
-  initContracts: initContractsEnhanced,
-  getBestQuote,
-  executeSwap,
+  initContracts,
+  // getBestQuote, // TODO: Implementar
+  // executeSwap, // TODO: Implementar
   
   // Quote functions
-  getQuoteNativeToToken,
-  getQuoteTokenToNative, 
-  getQuoteTokenToToken,
+  // getQuoteNativeToToken, // TODO: Implementar
+  // getQuoteTokenToNative, // TODO: Implementar
+  // getQuoteTokenToToken, // TODO: Implementar
   
   // Swap execution functions
-  executeSwapNativeToToken,
-  executeSwapTokenToNative,
-  executeSwapTokenToToken,
+  // executeSwapNativeToToken, // TODO: Implementar
+  // executeSwapTokenToNative, // TODO: Implementar
+  // executeSwapTokenToToken, // TODO: Implementar
   
   // Path-based swaps
-  executeSwapNativeToTokenPath,
-  executeSwapTokenToTokenPath,
+  // executeSwapNativeToTokenPath, // TODO: Implementar
+  // executeSwapTokenToTokenPath, // TODO: Implementar
   
   // Chain swaps
-  executeSwapNativeToTokenChain,
+  // executeSwapNativeToTokenChain, // TODO: Implementar
   
   // Referral functions
   getPendingReferral,
@@ -781,31 +583,29 @@ const cTrackerSDK = {
   MAINNET_CORE_CURRENT
 };
 
-// ES modules exports
-export default cTrackerSDK;
+// CommonJS export
+module.exports = cTrackerSDK;
 
-// Named exports for better tree-shaking
-export {
-  initContractsEnhanced as initContracts,
-  getBestQuote,
-  executeSwap,
-  getQuoteNativeToToken,
-  getQuoteTokenToNative,
-  getQuoteTokenToToken,
-  executeSwapNativeToToken,
-  executeSwapTokenToNative,
-  executeSwapTokenToToken,
-  executeSwapNativeToTokenPath,
-  executeSwapTokenToTokenPath,
-  executeSwapNativeToTokenChain,
-  getPendingReferral,
-  claimReferralNative,
-  claimReferralToken,
-  claimReferralPercentage,
-  parseConfig,
-  parseTierRules,
-  getGlobalLeftover,
-  getModelLeftover,
-  DEFAULT_DEADLINE_SECS,
-  MAINNET_CORE_CURRENT
-};
+// Individual exports for better tree-shaking
+module.exports.initContracts = initContracts;
+// module.exports.getBestQuote = getBestQuote; // TODO: Implementar
+// module.exports.executeSwap = executeSwap; // TODO: Implementar
+// module.exports.getQuoteNativeToToken = getQuoteNativeToToken; // TODO: Implementar
+// module.exports.getQuoteTokenToNative = getQuoteTokenToNative; // TODO: Implementar
+// module.exports.getQuoteTokenToToken = getQuoteTokenToToken; // TODO: Implementar
+// module.exports.executeSwapNativeToToken = executeSwapNativeToToken; // TODO: Implementar
+// module.exports.executeSwapTokenToNative = executeSwapTokenToNative; // TODO: Implementar
+// module.exports.executeSwapTokenToToken = executeSwapTokenToToken; // TODO: Implementar
+// module.exports.executeSwapNativeToTokenPath = executeSwapNativeToTokenPath; // TODO: Implementar
+// module.exports.executeSwapTokenToTokenPath = executeSwapTokenToTokenPath; // TODO: Implementar
+// module.exports.executeSwapNativeToTokenChain = executeSwapNativeToTokenChain; // TODO: Implementar
+module.exports.getPendingReferral = getPendingReferral;
+module.exports.claimReferralNative = claimReferralNative;
+module.exports.claimReferralToken = claimReferralToken;
+module.exports.claimReferralPercentage = claimReferralPercentage;
+module.exports.parseConfig = parseConfig;
+module.exports.parseTierRules = parseTierRules;
+module.exports.getGlobalLeftover = getGlobalLeftover;
+module.exports.getModelLeftover = getModelLeftover;
+module.exports.DEFAULT_DEADLINE_SECS = DEFAULT_DEADLINE_SECS;
+module.exports.MAINNET_CORE_CURRENT = MAINNET_CORE_CURRENT;
