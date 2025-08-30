@@ -393,7 +393,16 @@ async function getReferralSnapshot(referral, user, feeManager){
 }
 
 async function getPending(referral, user){
-  return referral.pendingReferral(user);
+  console.log('🔍 [SDK getPending] Iniciando para user:', user);
+  console.log('🔍 [SDK getPending] Referral contract:', referral?.target || referral?.address);
+  console.log('🔍 [SDK getPending] Llamando referral.pendingReferral...');
+  const result = await referral.pendingReferral(user);
+  console.log('🔍 [SDK getPending] Contract result:', {
+    raw: result?.toString(),
+    formatted: result ? ethers.formatEther(result) : 'null',
+    type: typeof result
+  });
+  return result;
 }
 
 // Snapshot helpers para claim
